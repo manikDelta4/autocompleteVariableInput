@@ -7,7 +7,7 @@ const App = () => {
 
   return (
     <div>
-      <div style={{ marginBottom: 5, fontSize: 16, fontWeight: 500, opacity: 0.8 }}>Prompt</div>
+      <div className="label">Label</div>
       <VariableInput value={value} onChange={setValue} variables={variables} />
     </div>
   );

@@ -54,7 +54,7 @@ export default function VariableInput({ value, onChange, variables = [] }: Props
 
     const list = isCtrlSpace
       ? currentWord?.length
-        ? variables.filter((variable) => variable?.slice(1)?.startsWith(initialState?.firstChar) && variable?.includes(currentWord))
+        ? variables.filter((variable) => variable?.includes(currentWord))
         : []
       : variables.filter((variable) => variable?.slice(1)?.startsWith(initialState?.firstChar) && variable?.includes(currentWord));
 
@@ -85,7 +85,8 @@ export default function VariableInput({ value, onChange, variables = [] }: Props
         lineWrapping: true,
         extraKeys: {
           "'@'": (cm) => {
-            onChange(value + "@");
+            const cursor = cm.getCursor();
+            cm.replaceRange("@", cursor);
             cm.showHint({
               hint: (editor: Editor) => customHint(editor),
               completeSingle: false,
