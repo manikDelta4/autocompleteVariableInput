@@ -1,0 +1,44 @@
+.codemirror-wrapper {
+  box-sizing: border-box;
+  padding: 0.2rem;
+  height: fit-content;
+  max-height: 100%;
+  width: 100%;
+  border-radius: 5px;
+  overflow: hidden;
+  border: 1px solid #777;
+  line-height: 110%;
+}
+
+.codemirror-wrapper * {
+  font-family: sans-serif !important;
+  font-size: 15px;
+}
+
+.cm-variable {
+  color: rgb(0, 0, 255);
+  background: rgba(0, 0, 255, 0.1);
+  border-radius: 2px;
+}
+
+.CodeMirror-hints {
+  font-weight: bold;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.05);
+  border-radius: 5px;
+}
+
+.CodeMirror-hints .CodeMirror-hint {
+  padding: 5px 10px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.CodeMirror-hint.CodeMirror-hint-active {
+  color: rgb(0, 0, 255);
+  background: rgba(0, 0, 255, 0.1);
+  border-radius: 2px;
+}
+
+.CodeMirror {
+  height: 100%;
+}
