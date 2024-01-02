@@ -1,14 +1,16 @@
 import { useState } from "react";
-import VariableInput from "./components/VariableInput";
+import SlateInput from "./components/SlateInput";
 
 const App = () => {
   const [value, setValue] = useState("");
-  const variables = ["@name", "@age", "@address", "@phone"];
+  const variables = ["broooo", "test", "another one", "demo", "demon", "decathlon", "brother", "bath"];
+
+  console.log("value", value);
 
   return (
     <div>
       <div className="label">Label</div>
-      <VariableInput value={value} onChange={setValue} variables={variables} />
+      <SlateInput variables={variables} onChange={setValue} placeholder="Add prompt here..." />
     </div>
   );
 };

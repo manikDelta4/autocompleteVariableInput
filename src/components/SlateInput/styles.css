@@ -1,0 +1,14 @@
+.editor {
+  padding: 8px;
+  border: 1px solid #777;
+  border-radius: 8px;
+  font-size: 15px;
+}
+
+.editor p {
+  margin: 0;
+}
+
+.editor span[data-slate-placeholder] {
+  top: clamp(8px, 20%, 40%) !important;
+}

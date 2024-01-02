@@ -1,0 +1,281 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import React, { useMemo, useCallback, useRef, useEffect, useState, ReactNode, KeyboardEvent } from "react";
+import { Editor, Transforms, Range, createEditor, Descendant, Element as SlateElement, Node, Text } from "slate";
+import { withHistory } from "slate-history";
+import { Slate, Editable, ReactEditor, withReact, useSelected, useFocused } from "slate-react";
+import ReactDOM from "react-dom";
+import { RenderElementProps, RenderLeafProps } from "slate-react";
+
+interface CustomEditor extends Editor {
+  isInline: (element: any) => boolean;
+  isVoid: (element: any) => boolean;
+  markableVoid: (element: any) => boolean;
+}
+
+interface MentionElement {
+  type: "mention";
+  character: string;
+  children: Text[];
+}
+
+interface MentionProps extends RenderElementProps {
+  element: MentionElement;
+}
+
+interface PortalProps {
+  children?: ReactNode;
+}
+
+const Portal: React.FC<PortalProps> = ({ children }) => {
+  return typeof document === "object" ? ReactDOM.createPortal(children, document.body) : null;
+};
+
+const SlateInput: React.FC = () => {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [target, setTarget] = useState<Range | null>(null);
+  const [index, setIndex] = useState<number>(0);
+  const [search, setSearch] = useState<string>("");
+  const renderElement = useCallback((props: any) => <Element {...props} />, []);
+  const renderLeaf = useCallback((props: any) => <Leaf {...props} />, []);
+  const editor = useMemo(() => withMentions(withReact(withHistory(createEditor()))), []);
+
+  const chars = CHARACTERS.filter((c: string) => c.toLowerCase().includes(search.toLowerCase())).slice(0, 10);
+
+  const onKeyDown = useCallback(
+    (event: KeyboardEvent) => {
+      if (target && chars.length > 0) {
+        switch (event.key) {
+          case "ArrowDown":
+            event.preventDefault();
+            setIndex(index >= chars.length - 1 ? 0 : index + 1);
+            break;
+          case "ArrowUp":
+            event.preventDefault();
+            setIndex(index <= 0 ? chars.length - 1 : index - 1);
+            break;
+          case "Tab":
+          case "Enter":
+            event.preventDefault();
+            console.log("editor", editor, " target", target, " chars", chars, " index", index);
+            Transforms.select(editor, target);
+            insertMention(editor, chars[index]);
+            setTarget(null);
+            break;
+          case "Escape":
+            event.preventDefault();
+            setTarget(null);
+            break;
+        }
+      }
+    },
+    [chars, editor, index, target]
+  );
+
+  useEffect(() => {
+    if (target && chars.length > 0) {
+      const el = ref.current;
+      const domRange = ReactEditor.toDOMRange(editor, target);
+      const rect = domRange.getBoundingClientRect();
+      if (el) {
+        el.style.top = `${rect.top + window.scrollY + 24}px`;
+        el.style.left = `${rect.left + window.scrollX}px`;
+      }
+    }
+  }, [chars.length, editor, index, search, target]);
+
+  const onChangeAt = () => {
+    const { selection } = editor;
+
+    if (selection && Range.isCollapsed(selection)) {
+      const [start] = Range.edges(selection);
+      const wordBefore = Editor.before(editor, start, { unit: "word" });
+      const before = wordBefore && Editor.before(editor, wordBefore);
+      const beforeRange = before && Editor.range(editor, before, start);
+      const beforeText = beforeRange && Editor.string(editor, beforeRange);
+      const beforeMatch = beforeText && beforeText.match(/^@(\w+)$/);
+      const after = Editor.after(editor, start);
+      const afterRange = Editor.range(editor, start, after);
+      const afterText = Editor.string(editor, afterRange);
+      const afterMatch = afterText.match(/^(\s|$)/);
+
+      if (beforeMatch && afterMatch) {
+        setTarget(beforeRange);
+        setSearch(beforeMatch[1]);
+        setIndex(0);
+        return;
+      }
+    }
+
+    setTarget(null);
+  };
+
+  const onChangeBrace = () => {
+    const { selection } = editor;
+
+    if (selection && Range.isCollapsed(selection)) {
+      const [start] = Range.edges(selection);
+      const wordBefore = Editor.before(editor, start, { unit: "word" });
+      const before = wordBefore && Editor.before(editor, wordBefore);
+      const beforeRange = before && Editor.range(editor, before, start);
+      const beforeText = beforeRange && Editor.string(editor, beforeRange);
+      const beforeMatch = beforeText && beforeText.match(/^{(\w*)$/);
+      const after = Editor.after(editor, start);
+      const afterRange = Editor.range(editor, start, after);
+      const afterText = Editor.string(editor, afterRange);
+      const afterMatch = afterText.match(/^(\s|$)/);
+
+      if (beforeMatch && afterMatch) {
+        setTarget(beforeRange);
+        setSearch(beforeMatch[1]);
+        setIndex(0);
+        return;
+      }
+    }
+
+    setTarget(null);
+  };
+
+  return (
+    <Slate editor={editor} initialValue={initialValue} onChange={onChangeBrace}>
+      <Editable renderElement={renderElement} renderLeaf={renderLeaf} onKeyDown={onKeyDown} placeholder="Enter some text..." />
+      {target && chars.length > 0 && (
+        <Portal>
+          <div
+            ref={ref}
+            style={{
+              top: "-9999px",
+              left: "-9999px",
+              position: "absolute",
+              zIndex: 1,
+              padding: "3px",
+              background: "white",
+              borderRadius: "4px",
+              boxShadow: "0 1px 5px rgba(0,0,0,.2)",
+            }}
+            data-cy="mentions-portal"
+          >
+            {chars.map((char, i) => (
+              <div
+                key={char}
+                onClick={() => {
+                  Transforms.select(editor, target);
+                  insertMention(editor, char);
+                  setTarget(null);
+                }}
+                style={{
+                  padding: "1px 3px",
+                  borderRadius: "3px",
+                  background: i === index ? "#B4D5FF" : "transparent",
+                }}
+              >
+                {char}
+              </div>
+            ))}
+          </div>
+        </Portal>
+      )}
+    </Slate>
+  );
+};
+
+const withMentions = (editor: CustomEditor): CustomEditor => {
+  const { isInline, isVoid, markableVoid } = editor;
+
+  editor.isInline = (element) => {
+    return element.type === "mention" ? true : isInline(element);
+  };
+
+  editor.isVoid = (element) => {
+    return element.type === "mention" ? true : isVoid(element);
+  };
+
+  editor.markableVoid = (element) => {
+    return element.type === "mention" || markableVoid(element);
+  };
+
+  return editor;
+};
+
+const insertMention = (editor: CustomEditor, character: string): void => {
+  const mention: MentionElement = {
+    type: "mention",
+    character,
+    children: [{ text: "" }],
+  };
+  Transforms.insertNodes(editor, mention);
+  Transforms.move(editor);
+};
+
+const Leaf: React.FC<RenderLeafProps> = ({ attributes, children, leaf }) => {
+  if (leaf.bold) {
+    children = <strong>{children}</strong>;
+  }
+
+  if (leaf.code) {
+    children = <code>{children}</code>;
+  }
+
+  if (leaf.italic) {
+    children = <em>{children}</em>;
+  }
+
+  if (leaf.underline) {
+    children = <u>{children}</u>;
+  }
+
+  return <span {...attributes}>{children}</span>;
+};
+
+const Element: React.FC<RenderElementProps> = (props) => {
+  const { attributes, children, element } = props;
+  switch (element.type) {
+    case "mention":
+      return <Mention {...props} />;
+    default:
+      return <p {...attributes}>{children}</p>;
+  }
+};
+
+const Mention: React.FC<MentionProps> = ({ attributes, children, element }) => {
+  const selected = useSelected();
+  const focused = useFocused();
+  const style: React.CSSProperties = {
+    padding: "3px 3px 2px",
+    margin: "0 1px",
+    verticalAlign: "baseline",
+    display: "inline-block",
+    borderRadius: "4px",
+    backgroundColor: "rgba(0, 0, 255, 0.08)",
+    color: "rgb(0, 0, 255)",
+    fontSize: "0.9em",
+    boxShadow: selected && focused ? "0 0 0 2px #B4D5FF" : "none",
+  };
+  // See if our empty text child has any styling marks applied and apply those
+  if (element.children[0].bold) {
+    style.fontWeight = "bold";
+  }
+  if (element.children[0].italic) {
+    style.fontStyle = "italic";
+  }
+  return (
+    <span {...attributes} contentEditable={false} data-cy={`mention-${element.character.replace(" ", "-")}`} style={style}>
+      {`{{${element.character}}}`}
+      {children}
+    </span>
+  );
+};
+
+const initialValue: Descendant[] = [
+  {
+    type: "paragraph",
+    children: [
+      {
+        text: "Th ",
+      },
+    ],
+  },
+];
+
+const CHARACTERS = ["broooo", "test", "another one", "demo", "demon", "decathlon", "brother", "bath"];
+
+export default SlateInput;
